@@ -1,0 +1,18 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local databases & exports (never commit personal health data)
+*.db
+*.sqlite
+*.sqlite3
+exports/
+
+# Secrets & local OAuth tokens
+.env
+.env.*
+tokens.json
+strava_tokens.json
+strava_config.json
+oura_config.json

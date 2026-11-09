@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Oura Connect — Publix Atlanta Sub-2:00 Half-Marathon Coach</title>
+  <style>
+    :root {
+      --bg: #080c14;
+      --panel: #111827;
+      --panel-alt: #162033;
+      --border: #1f2d46;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --strava: #fc4c02;
+      --sleep: #818cf8;
+      --green: #34d399;
+      --yellow: #fbbf24;
+      --red: #f87171;
+      --hrv: #2dd4bf;
+      --hr: #fb7185;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at top right, #132038 0%, var(--bg) 55%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .container { max-width: 1300px; margin: 0 auto; padding: 22px 20px 64px; }
+    header {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+      gap: 14px; margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .ring-icon {
+      width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--accent);
+      box-shadow: 0 0 18px rgba(56, 189, 248, 0.35); position: relative;
+    }
+    .ring-icon::after {
+      content: ""; position: absolute; top: -4px; left: 50%; transform: translateX(-50%);
+      width: 10px; height: 3px; background: var(--text); border-radius: 2px;
+    }
+    .brand h1 { margin: 0; font-size: 1.3rem; letter-spacing: -0.02em; }
+    .brand p { margin: 2px 0 0; font-size: 0.8rem; color: var(--muted); }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem;
+      padding: 6px 11px; border-radius: 999px; background: var(--panel);
+      border: 1px solid var(--border); color: var(--muted);
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #64748b; }
+    .dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .dot.strava { background: var(--strava); box-shadow: 0 0 8px var(--strava); }
+    .dot.warn { background: var(--yellow); }
+
+    select, input, textarea, button {
+      font: inherit; color: var(--text); background: var(--panel);
+      border: 1px solid var(--border); border-radius: 9px; padding: 8px 12px; font-size: 0.85rem;
+    }
+    button { cursor: pointer; font-weight: 600; transition: background 0.15s, border-color 0.15s; }
+    button:hover:not(:disabled) { border-color: #3b5278; background: var(--panel-alt); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    .btn-primary { background: linear-gradient(135deg, #38bdf8, #6366f1); color: #060911; border: none; }
+    .btn-primary:hover:not(:disabled) { background: linear-gradient(135deg, #7dd3fc, #818cf8); }
+    .btn-strava { background: var(--strava); color: #fff; border: none; }
+    .btn-strava:hover:not(:disabled) { background: #ff6320; }
+
+    .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+    .tab-btn {
+      padding: 9px 18px; border-radius: 10px; background: var(--panel);
+      border: 1px solid var(--border); color: var(--muted); font-size: 0.9rem;
+    }
+    .tab-btn.active {
+      background: rgba(56, 189, 248, 0.14); border-color: var(--accent); color: var(--text);
+    }
+
+    .card {
+      background: rgba(17, 24, 39, 0.9); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px 22px; backdrop-filter: blur(8px);
+    }
+    .toast { margin-bottom: 16px; padding: 12px 16px; border-radius: 12px; font-size: 0.87rem; display: none; }
+    .toast.info { display: block; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.35); color: #bae6fd; }
+    .toast.error { display: block; background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.35); color: #fecaca; }
+
+    .hero-banner {
+      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+      gap: 16px; margin-bottom: 18px;
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.92), rgba(17, 24, 39, 0.95));
+      border: 1px solid #2b4268;
+    }
+    .hero-title { margin: 0; font-size: 1.25rem; }
+    .hero-sub { margin: 4px 0 0; color: var(--muted); font-size: 0.86rem; }
+    .countdown-box { display: flex; gap: 18px; text-align: center; }
+    .countdown-stat strong { display: block; font-size: 1.5rem; color: var(--accent); }
+    .countdown-stat span { font-size: 0.74rem; color: var(--muted); text-transform: uppercase; }
+
+    .coach-top-grid {
+      display: grid; grid-template-columns: 1fr 1.25fr; gap: 18px; margin-bottom: 20px;
+    }
+    @media (max-width: 900px) { .coach-top-grid { grid-template-columns: 1fr; } }
+
+    .signal-pill {
+      display: inline-flex; align-items: center; gap: 8px; padding: 5px 13px;
+      border-radius: 999px; font-weight: 700; font-size: 0.8rem; letter-spacing: 0.04em;
+    }
+    .signal-GREEN { background: rgba(52, 211, 153, 0.16); color: var(--green); border: 1px solid rgba(52, 211, 153, 0.4); }
+    .signal-YELLOW { background: rgba(251, 191, 36, 0.16); color: var(--yellow); border: 1px solid rgba(251, 191, 36, 0.4); }
+    .signal-RED { background: rgba(248, 113, 113, 0.16); color: var(--red); border: 1px solid rgba(248, 113, 113, 0.4); }
+    .signal-MANUAL, .signal-COACH_EDIT { background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.35); }
+
+    .mini-metrics {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0;
+    }
+    .mini-box {
+      background: #0b1220; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+    }
+    .mini-box span { display: block; font-size: 0.72rem; color: var(--muted); text-transform: uppercase; }
+    .mini-box strong { font-size: 1.05rem; margin-top: 3px; display: block; }
+
+    .reasons-list { margin: 10px 0 0; padding-left: 18px; font-size: 0.85rem; color: #cbd5e1; line-height: 1.55; }
+
+    .workout-meta { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 12px; }
+    .meta-chip {
+      background: #0b1220; border: 1px solid var(--border); border-radius: 8px;
+      padding: 6px 10px; font-size: 0.82rem; color: #e2e8f0;
+    }
+    .prehab-box {
+      margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+      background: rgba(129, 140, 248, 0.1); border: 1px solid rgba(129, 140, 248, 0.3);
+      font-size: 0.82rem; color: #c7d2fe;
+    }
+    .checkin-bar {
+      margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    }
+
+    .week-nav {
+      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+      gap: 12px; margin-bottom: 14px;
+    }
+    .week-grid {
+      display: grid; grid-template-columns: repeat(7, minmax(150px, 1fr)); gap: 10px;
+      overflow-x: auto; padding-bottom: 4px;
+    }
+    .day-card {
+      background: #0c1322; border: 1px solid var(--border); border-radius: 12px;
+      padding: 12px; display: flex; flex-direction: column; justify-content: space-between;
+      min-height: 205px; position: relative;
+    }
+    .day-card.today { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .day-card.quality { border-top: 3px solid var(--yellow); }
+    .day-card.race { border-top: 3px solid var(--green); background: rgba(52, 211, 153, 0.07); }
+    .day-top { display: flex; justify-content: space-between; align-items: center; font-size: 0.76rem; color: var(--muted); }
+    .type-tag {
+      font-size: 0.68rem; text-transform: uppercase; padding: 2px 7px; border-radius: 999px;
+      background: #1e293b; color: #cbd5e1; font-weight: 600;
+    }
+    .day-title { font-weight: 700; font-size: 0.88rem; margin: 8px 0 4px; line-height: 1.3; }
+    .day-miles { font-size: 1.15rem; font-weight: 800; color: var(--accent); }
+    .day-pace { font-size: 0.75rem; color: var(--muted); margin-top: 3px; }
+    .strava-done {
+      margin-top: 8px; padding: 6px 8px; border-radius: 8px;
+      background: rgba(52, 211, 153, 0.13); border: 1px solid rgba(52, 211, 153, 0.35);
+      font-size: 0.74rem; color: #a7f3d0;
+    }
+    .swap-btn {
+      margin-top: 8px; padding: 4px 8px; font-size: 0.73rem; border-radius: 6px; width: 100%;
+    }
+    .swap-btn.selected { border-color: var(--accent); color: var(--accent); }
+
+    .audit-item {
+      display: flex; justify-content: space-between; align-items: center; gap: 12px;
+      padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem;
+    }
+    .audit-item:last-child { border-bottom: none; }
+
+    .setup-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 12px; }
+    .field label { display: block; font-size: 0.78rem; color: var(--muted); margin-bottom: 5px; }
+    .field input { width: 100%; }
+    .code-pill {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: #0b1220; border: 1px solid var(--border); padding: 2px 7px;
+      border-radius: 6px; font-size: 0.8rem; color: var(--accent);
+    }
+
+    /* Biometrics Tab Styles */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+    .kpi-title { font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 8px; }
+    .kpi-value { font-size: 1.9rem; font-weight: 700; line-height: 1.1; }
+    .kpi-sub { margin-top: 8px; font-size: 0.79rem; color: var(--muted); }
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(480px, 1fr)); gap: 18px; margin-bottom: 20px; }
+    @media (max-width: 600px) { .charts-grid { grid-template-columns: 1fr; } }
+    .chart-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+    .chart-header h3 { margin: 0; font-size: 0.96rem; }
+    .legend { display: flex; gap: 12px; font-size: 0.75rem; color: var(--muted); }
+    .swatch { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 4px; }
+    svg.chart-svg { width: 100%; height: 210px; display: block; }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { padding: 9px 11px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; }
+    .pill { padding: 2px 8px; border-radius: 999px; font-size: 0.74rem; background: #1e293b; text-transform: capitalize; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="ring-icon"></div>
+        <div>
+          <h1>Oura Connect &amp; Half-Marathon Coach</h1>
+          <p>Publix Atlanta Half Marathon (Mar 6, 2027) &bull; 100% Oura Ring v2 Recovery + Workout Engine</p>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="badge"><span class="dot" id="ouraDot"></span><span id="ouraStatusText">Oura...</span></div>
+        <button class="btn-primary" id="syncAllBtn">Sync Oura &amp; Adapt</button>
+        <button id="toggleConnectionsBtn">Oura Settings</button>
+      </div>
+    </header>
+
+    <div id="toast" class="toast"></div>
+
+    <!-- Collapsible Oura OAuth Setup Panel -->
+    <section id="connectionsPanel" class="card" style="display:none; margin-bottom:20px; border-color:#2b4268;">
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="margin:0;">Oura Ring API v2 Connection (Recovery + Auto-Synced Running Workouts)</h3>
+          <button id="disconnectOuraBtn" style="display:none; color:var(--red); padding:4px 10px;">Disconnect</button>
+        </div>
+        <p style="font-size:0.82rem; color:var(--muted); margin:6px 0 12px;">
+          Portal: <a href="https://cloud.ouraring.com" target="_blank" rel="noopener" style="color:var(--accent);">cloud.ouraring.com</a> &bull;
+          Redirect URI: <span class="code-pill">http://localhost:8080/oauth/callback</span> &bull;
+          Tip: Use <strong>Record Workout HR</strong> in the Oura app during outdoor runs to capture GPS distance + HR automatically!
+        </p>
+        <div class="setup-grid">
+          <div class="field"><label>Oura Client ID</label><input id="ouraClientId" type="text" placeholder="Saved or enter Client ID" /></div>
+          <div class="field"><label>Oura Client Secret</label><input id="ouraClientSecret" type="password" placeholder="Client Secret" /></div>
+        </div>
+        <div style="margin-top:12px;">
+          <button class="btn-primary" id="connectOuraBtn">Save &amp; Authorize Oura</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="tabs">
+      <button class="tab-btn active" id="tabCoachBtn">Half-Marathon Coach (17-Week Plan)</button>
+      <button class="tab-btn" id="tabBioBtn">Oura Biometrics &amp; Trends</button>
+    </div>
+
+    <!-- ==================== TAB 1: HALF-MARATHON COACH ==================== -->
+    <main id="coachView">
+      <section class="card hero-banner">
+        <div>
+          <h2 class="hero-title" id="raceTitle">Publix Atlanta Half Marathon &mdash; Sub-2:00:00</h2>
+          <p class="hero-sub" id="raceSub">Saturday, March 6, 2027 &bull; Target Pace &lt; 9:09/mi (Rolling Hills Strategy: 9:00–9:08/mi)</p>
+        </div>
+        <div class="countdown-box">
+          <div class="countdown-stat"><strong id="daysRemaining">--</strong><span>Days to Race</span></div>
+          <div class="countdown-stat"><strong id="weeksRemaining">--</strong><span>Weeks Left</span></div>
+          <div class="countdown-stat"><strong id="weekProgressStat">--</strong><span>This Week Miles</span></div>
+        </div>
+      </section>
+
+      <section class="coach-top-grid">
+        <!-- Readiness Signal Card -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+            <span style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted);">Readiness-to-Train Signal</span>
+            <span id="signalBadge" class="signal-pill signal-GREEN">GREEN &bull; --</span>
+          </div>
+          <h3 id="readinessHeadline" style="margin:10px 0 6px; font-size:1.05rem;">Evaluating your Oura baseline...</h3>
+          <div class="mini-metrics">
+            <div class="mini-box"><span>Nightly HRV</span><strong id="mHrv">--</strong></div>
+            <div class="mini-box"><span>Lowest HR</span><strong id="mRhr">--</strong></div>
+            <div class="mini-box"><span>Sleep / Temp &Delta;</span><strong id="mSleepTemp">--</strong></div>
+          </div>
+          <ul class="reasons-list" id="readinessReasons"></ul>
+        </div>
+
+        <!-- Today's Workout Prescription Card -->
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span id="todayLabel" style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted);">Today's Prescription</span>
+            <span id="todayPhaseLabel" class="type-tag">Week 1</span>
+          </div>
+          <h3 id="todayWorkoutTitle" style="margin:10px 0 4px; font-size:1.18rem;">--</h3>
+          <div class="workout-meta">
+            <span class="meta-chip" id="todayMilesChip">0 mi</span>
+            <span class="meta-chip" id="todayPaceChip">Pace: -</span>
+            <span class="meta-chip" id="todayHillChip" style="display:none;"></span>
+          </div>
+          <p id="todayWorkoutDesc" style="margin:0; font-size:0.87rem; color:#cbd5e1; line-height:1.55;"></p>
+          <div id="todayPrehabBox" class="prehab-box" style="display:none;"></div>
+
+          <div class="checkin-bar">
+            <span style="font-size:0.78rem; color:var(--muted); font-weight:600;">Check-In / Log Run:</span>
+            <input id="checkinMiles" type="number" step="0.1" min="0" placeholder="Miles (opt.)" style="width:105px;" title="Optional manual run distance if treadmill/no phone GPS" />
+            <input id="checkinMinutes" type="number" step="1" min="0" placeholder="Min (opt.)" style="width:95px;" title="Optional run duration in minutes" />
+            <select id="checkinSoreness" title="Muscle/Tendon Soreness (0-10)">
+              <option value="">Soreness (0–10)</option>
+              <option value="0">0 — Fresh legs</option>
+              <option value="2">2 — Light stiffness</option>
+              <option value="4">4 — Tightness</option>
+              <option value="5">5 — Moderate (Yellow)</option>
+              <option value="7">7 — High/Pain (Red)</option>
+            </select>
+            <select id="checkinRpe" title="Run RPE (1-10)">
+              <option value="">RPE</option>
+              <option value="3">RPE 3 Easy</option>
+              <option value="5">RPE 5 Steady</option>
+              <option value="7">RPE 7 Hard</option>
+              <option value="9">RPE 9 Max</option>
+            </select>
+            <input id="checkinNotes" type="text" placeholder="Notes (e.g. tight calf, treadmill)" style="flex:1; min-width:150px;" />
+            <button id="saveCheckinBtn">Save &amp; Adapt</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Interactive 17-Week Training Calendar -->
+      <section class="card" style="margin-bottom:20px;">
+        <div class="week-nav">
+          <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <button id="prevWeekBtn">&larr; Prev</button>
+            <select id="weekSelect"></select>
+            <button id="nextWeekBtn">Next &rarr;</button>
+            <span id="weekPhaseTitle" style="font-weight:600; color:var(--accent); font-size:0.92rem; margin-left:6px;"></span>
+          </div>
+          <div style="font-size:0.84rem; color:var(--muted);" id="weekTotalsLabel"></div>
+        </div>
+        <p id="swapHint" style="margin:0 0 10px; font-size:0.79rem; color:var(--muted);">
+          Oura running workouts sync automatically onto this calendar! Click <strong>Swap Day</strong> on any two days to trade workouts (with 1-click Undo below).
+        </p>
+        <div class="week-grid" id="weekGrid"></div>
+      </section>
+
+      <!-- Adaptation Audit Log + 1-Click Undo -->
+      <section class="card">
+        <div class="chart-header">
+          <h3>Coach Adaptation Audit Log</h3>
+          <span style="font-size:0.78rem; color:var(--muted);">Auto-swaps &amp; schedule changes with 1-click Undo</span>
+        </div>
+        <div id="adaptationsList"></div>
+      </section>
+    </main>
+
+    <!-- ==================== TAB 2: OURA BIOMETRICS ==================== -->
+    <section id="bioView" style="display:none;">
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-bottom:16px;">
+        <select id="daysSelect">
+          <option value="7">Last 7 days</option>
+          <option value="14">Last 14 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="365">Last 365 days</option>
+        </select>
+        <button id="exportCsvBtn">Export CSV</button>
+        <button id="exportJsonBtn">Export JSON</button>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="card"><div class="kpi-title">Sleep Score</div><div class="kpi-value" id="kpiSleep" style="color:var(--sleep);">--</div><div class="kpi-sub" id="kpiSleepSub">Avg: --</div></div>
+        <div class="card"><div class="kpi-title">Readiness Score</div><div class="kpi-value" id="kpiReadiness" style="color:var(--green);">--</div><div class="kpi-sub" id="kpiReadinessSub">Avg: --</div></div>
+        <div class="card"><div class="kpi-title">Activity Score</div><div class="kpi-value" id="kpiActivity" style="color:var(--yellow);">--</div><div class="kpi-sub" id="kpiActivitySub">Avg: --</div></div>
+        <div class="card"><div class="kpi-title">Nightly HRV</div><div class="kpi-value" id="kpiHrv" style="color:var(--hrv);">--</div><div class="kpi-sub" id="kpiHrvSub">Avg: --</div></div>
+        <div class="card"><div class="kpi-title">Lowest Resting HR</div><div class="kpi-value" id="kpiHr" style="color:var(--hr);">--</div><div class="kpi-sub" id="kpiHrSub">Avg: --</div></div>
+        <div class="card"><div class="kpi-title">Total Sleep &amp; SpO2</div><div class="kpi-value" id="kpiDuration">--</div><div class="kpi-sub" id="kpiSpo2Sub">SpO2 Avg: --</div></div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="card">
+          <div class="chart-header"><h3>Daily Scores</h3><div class="legend"><span><i class="swatch" style="background:var(--sleep)"></i>Sleep</span><span><i class="swatch" style="background:var(--green)"></i>Readiness</span><span><i class="swatch" style="background:var(--yellow)"></i>Activity</span></div></div>
+          <svg id="scoresChart" class="chart-svg" viewBox="0 0 560 210"></svg>
+        </div>
+        <div class="card">
+          <div class="chart-header"><h3>Nightly HRV &amp; Lowest HR</h3><div class="legend"><span><i class="swatch" style="background:var(--hrv)"></i>HRV (ms)</span><span><i class="swatch" style="background:var(--hr)"></i>Min HR</span></div></div>
+          <svg id="hrvChart" class="chart-svg" viewBox="0 0 560 210"></svg>
+        </div>
+        <div class="card">
+          <div class="chart-header"><h3>Sleep Architecture</h3><div class="legend"><span><i class="swatch" style="background:#4f46e5"></i>Deep</span><span><i class="swatch" style="background:#38bdf8"></i>REM</span><span><i class="swatch" style="background:#94a3b8"></i>Light</span></div></div>
+          <svg id="stagesChart" class="chart-svg" viewBox="0 0 560 210"></svg>
+        </div>
+        <div class="card">
+          <div class="chart-header"><h3>Daily Steps</h3><div class="legend"><span><i class="swatch" style="background:var(--yellow)"></i>Steps</span></div></div>
+          <svg id="stepsChart" class="chart-svg" viewBox="0 0 560 210"></svg>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="chart-header"><h3>Daily Biometrics Log</h3><span id="lastSyncLabel" style="font-size:0.8rem; color:var(--muted);"></span></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Date</th><th>Sleep</th><th>Readiness</th><th>Activity</th><th>Total Sleep</th><th>Deep / REM</th><th>HRV</th><th>Min HR</th><th>Temp &Delta;</th><th>Steps</th><th>Stress</th><th>SpO2</th></tr>
+            </thead>
+            <tbody id="logBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const el = (id) => document.getElementById(id);
+    let currentWeek = 1;
+    let todayIso = "";
+    let swapFirstDay = null;
+
+    function showToast(msg, kind = "info") {
+      const t = el("toast");
+      t.textContent = msg;
+      t.className = `toast ${kind}`;
+    }
+
+    async function apiGet(path) {
+      const res = await fetch(path);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      return data;
+    }
+
+    async function apiPost(path, body = {}) {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      return data;
+    }
+
+    // Tab switching
+    el("tabCoachBtn").addEventListener("click", () => {
+      el("tabCoachBtn").classList.add("active");
+      el("tabBioBtn").classList.remove("active");
+      el("coachView").style.display = "block";
+      el("bioView").style.display = "none";
+    });
+    el("tabBioBtn").addEventListener("click", () => {
+      el("tabBioBtn").classList.add("active");
+      el("tabCoachBtn").classList.remove("active");
+      el("bioView").style.display = "block";
+      el("coachView").style.display = "none";
+      loadBiometrics();
+    });
+    el("toggleConnectionsBtn").addEventListener("click", () => {
+      const p = el("connectionsPanel");
+      p.style.display = p.style.display === "none" ? "block" : "none";
+    });
+
+    async function refreshStatus() {
+      const st = await apiGet("/api/status");
+      if (st.connected) {
+        el("ouraDot").className = "dot ok";
+        const runsNote = st.strava_runs_count ? ` • ${st.strava_runs_count} runs synced` : "";
+        el("ouraStatusText").textContent = `Oura Connected${runsNote}`;
+        el("disconnectOuraBtn").style.display = "inline-block";
+      } else {
+        el("ouraDot").className = st.configured ? "dot warn" : "dot";
+        el("ouraStatusText").textContent = st.configured ? "Oura Auth Needed" : "Connect Oura";
+        el("connectionsPanel").style.display = "block";
+      }
+      return st;
+    }
+
+    function renderWeekGrid(weekData) {
+      el("weekPhaseTitle").textContent = weekData.phase || "";
+      el("weekTotalsLabel").textContent =
+        `Planned: ${weekData.planned_miles} mi  |  Completed (Oura): ${weekData.completed_miles} mi`;
+
+      const dows = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const grid = el("weekGrid");
+      grid.innerHTML = (weekData.days || []).map((d, idx) => {
+        const isToday = d.day === todayIso;
+        const cls = ["day-card"];
+        if (isToday) cls.push("today");
+        if (d.workout_type === "race") cls.push("race");
+        else if (d.is_quality) cls.push("quality");
+
+        const hrMeta = d.actual_avg_hr ? ` &bull; ${Math.round(d.actual_avg_hr)} bpm` : "";
+        const doneHtml = d.actual_miles
+          ? `<div class="strava-done"><strong>&#10003; ${d.actual_miles} mi</strong> @ ${d.actual_pace}${hrMeta}</div>`
+          : "";
+        const strengthBadge = d.strength_addon
+          ? `<div style="margin-top:6px; font-size:0.72rem; color:#a5b4fc;">+ 15m Runner Prehab</div>`
+          : "";
+        const swapSelected = swapFirstDay === d.day;
+        const swapBtn = d.workout_type !== "race"
+          ? `<button class="swap-btn ${swapSelected ? "selected" : ""}" data-swap="${d.day}">${swapSelected ? "Cancel Swap" : (swapFirstDay ? "Swap Here" : "Swap Day")}</button>`
+          : "";
+
+        return `<div class="${cls.join(" ")}">
+          <div>
+            <div class="day-top">
+              <span><strong>${dows[idx] || ""}</strong> ${d.day.slice(5)}</span>
+              <span class="type-tag">${d.workout_type.replace("_", " ")}</span>
+            </div>
+            <div class="day-title">${d.title}</div>
+            <div class="day-miles">${d.planned_miles > 0 ? d.planned_miles + " mi" : "Rest"}</div>
+            <div class="day-pace">${d.target_pace !== "-" ? d.target_pace : ""}</div>
+            ${d.hill_focus ? `<div style="margin-top:5px; font-size:0.72rem; color:#94a3b8;">&#9968; ${d.hill_focus}</div>` : ""}
+            ${strengthBadge}
+            ${doneHtml}
+          </div>
+          ${swapBtn}
+        </div>`;
+      }).join("");
+
+      grid.querySelectorAll("[data-swap]").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const clickedDay = btn.getAttribute("data-swap");
+          if (!swapFirstDay) {
+            swapFirstDay = clickedDay;
+            el("swapHint").innerHTML = `Selected <strong>${clickedDay}</strong> — now click <strong>Swap Here</strong> on the target day.`;
+            renderWeekGrid(weekData);
+          } else if (swapFirstDay === clickedDay) {
+            swapFirstDay = null;
+            el("swapHint").innerHTML = `Oura running workouts sync automatically onto this calendar! Click <strong>Swap Day</strong> on any two days to trade workouts.`;
+            renderWeekGrid(weekData);
+          } else {
+            const first = swapFirstDay;
+            swapFirstDay = null;
+            try {
+              await apiPost("/api/coach/swap", { day_a: first, day_b: clickedDay });
+              showToast(`Swapped workouts between ${first} and ${clickedDay}.`, "info");
+              await loadCoachOverview();
+              await loadWeek(currentWeek);
+            } catch (err) {
+              showToast(err.message, "error");
+            }
+          }
+        });
+      });
+    }
+
+    async function loadWeek(weekNum) {
+      currentWeek = Math.max(1, Math.min(17, Number(weekNum)));
+      el("weekSelect").value = String(currentWeek);
+      const data = await apiGet(`/api/coach/week?week=${currentWeek}`);
+      renderWeekGrid(data);
+    }
+
+    async function loadCoachOverview() {
+      const ov = await apiGet("/api/coach/overview");
+      todayIso = ov.today;
+
+      el("daysRemaining").textContent = ov.race.days_remaining;
+      el("weeksRemaining").textContent = ov.race.weeks_remaining;
+      el("weekProgressStat").textContent = `${ov.week_summary.completed_miles} / ${ov.week_summary.planned_miles} mi`;
+
+      const sel = el("weekSelect");
+      if (!sel.options.length) {
+        for (let w = 1; w <= 17; w++) {
+          const opt = document.createElement("option");
+          opt.value = String(w);
+          opt.textContent = w === 17 ? `Week 17 (Race Week!)` : `Week ${w}`;
+          sel.appendChild(opt);
+        }
+      }
+
+      const r = ov.readiness || {};
+      const m = r.metrics || {};
+      const badge = el("signalBadge");
+      badge.className = `signal-pill signal-${r.signal || "GREEN"}`;
+      badge.textContent = `${r.signal || "GREEN"} • ${r.score ?? "--"}/100`;
+      el("readinessHeadline").textContent = r.headline || "";
+
+      el("mHrv").textContent = m.hrv_ms != null ? `${Math.round(m.hrv_ms)} ms (${m.hrv_z >= 0 ? "+" : ""}${m.hrv_z}σ)` : "--";
+      el("mRhr").textContent = m.rhr_bpm != null ? `${Math.round(m.rhr_bpm)} bpm (avg ${m.rhr_28d_mean})` : "--";
+      const tempTxt = m.temperature_deviation != null ? `${m.temperature_deviation >= 0 ? "+" : ""}${Number(m.temperature_deviation).toFixed(2)}°C` : "--";
+      el("mSleepTemp").textContent = `${m.sleep_hours != null ? m.sleep_hours + "h" : "--"} / ${tempTxt}`;
+
+      el("readinessReasons").innerHTML = (r.reasons || []).map(item => `<li>${item}</li>`).join("");
+
+      const tw = ov.today_workout;
+      if (tw) {
+        el("todayLabel").textContent = `Today's Prescription (${tw.day})`;
+        el("todayPhaseLabel").textContent = `Week ${tw.week_num}`;
+        el("todayWorkoutTitle").textContent = tw.title;
+        el("todayMilesChip").textContent = tw.planned_miles > 0 ? `${tw.planned_miles} miles` : "Rest Day";
+        el("todayPaceChip").textContent = `Target: ${tw.target_pace}`;
+        if (tw.hill_focus) {
+          el("todayHillChip").style.display = "inline-block";
+          el("todayHillChip").textContent = tw.hill_focus;
+        } else {
+          el("todayHillChip").style.display = "none";
+        }
+        el("todayWorkoutDesc").textContent = tw.description || "";
+        if (tw.strength_addon) {
+          el("todayPrehabBox").style.display = "block";
+          el("todayPrehabBox").innerHTML = `<strong>+ Runner Prehab Add-On:</strong> ${tw.strength_addon}`;
+        } else {
+          el("todayPrehabBox").style.display = "none";
+        }
+        if (tw.checkin_notes) el("checkinNotes").value = tw.checkin_notes;
+      }
+
+      currentWeek = ov.active_week_num || 1;
+      sel.value = String(currentWeek);
+      renderWeekGrid(ov.week_summary);
+
+      const adList = el("adaptationsList");
+      const adaps = ov.adaptations || [];
+      if (!adaps.length) {
+        adList.innerHTML = `<p style="color:var(--muted); font-size:0.85rem; margin:4px 0;">No schedule adaptations needed yet—your plan is running on its baseline 17-week track.</p>`;
+      } else {
+        adList.innerHTML = adaps.map(a => {
+          const undone = Boolean(a.reverted_at);
+          return `<div class="audit-item" style="${undone ? "opacity:0.5;" : ""}">
+            <div>
+              <span class="signal-pill signal-${a.signal_level}" style="padding:2px 9px; font-size:0.72rem; margin-right:8px;">${a.signal_level}</span>
+              <strong>${a.target_day}</strong> &mdash; ${a.reason}
+              ${undone ? `<em>(Undone)</em>` : ""}
+            </div>
+            ${!undone ? `<button data-undo="${a.id}" style="padding:5px 11px; font-size:0.78rem;">Undo</button>` : ""}
+          </div>`;
+        }).join("");
+
+        adList.querySelectorAll("[data-undo]").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            try {
+              await apiPost("/api/coach/undo", { adaptation_id: Number(btn.getAttribute("data-undo")) });
+              showToast("Reverted adaptation and restored original workout schedule.", "info");
+              await loadCoachOverview();
+            } catch (err) {
+              showToast(err.message, "error");
+            }
+          });
+        });
+      }
+    }
+
+    el("prevWeekBtn").addEventListener("click", () => loadWeek(currentWeek - 1));
+    el("nextWeekBtn").addEventListener("click", () => loadWeek(currentWeek + 1));
+    el("weekSelect").addEventListener("change", (e) => loadWeek(e.target.value));
+
+    el("saveCheckinBtn").addEventListener("click", async () => {
+      try {
+        const res = await apiPost("/api/coach/checkin", {
+          day: todayIso,
+          miles: el("checkinMiles").value,
+          duration_min: el("checkinMinutes").value,
+          soreness: el("checkinSoreness").value,
+          rpe: el("checkinRpe").value,
+          notes: el("checkinNotes").value.trim(),
+        });
+        const msg = res.adaptation && res.adaptation.adapted
+          ? `Saved! Coach adapted plan: ${res.adaptation.action_summary}`
+          : "Saved check-in / run details and updated plan.";
+        showToast(msg, "info");
+        el("checkinMiles").value = "";
+        el("checkinMinutes").value = "";
+        await refreshStatus();
+        await loadCoachOverview();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    });
+
+    el("connectOuraBtn").addEventListener("click", async () => {
+      try {
+        const cid = el("ouraClientId").value.trim();
+        const csec = el("ouraClientSecret").value.trim();
+        if (cid || csec) await apiPost("/api/config", { client_id: cid, client_secret: csec });
+        const { authorize_url } = await apiGet("/api/auth-url");
+        window.location.href = authorize_url;
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    });
+
+    el("disconnectOuraBtn").addEventListener("click", async () => {
+      await apiPost("/api/disconnect");
+      await refreshStatus();
+    });
+
+    el("syncAllBtn").addEventListener("click", async () => {
+      const btn = el("syncAllBtn");
+      btn.disabled = true;
+      btn.textContent = "Syncing...";
+      try {
+        const res = await apiPost("/api/coach/sync-all", { days: 30 });
+        const ouraCnt = Object.values((res.sync && res.sync.counts) || {}).reduce((a, b) => a + b, 0);
+        const adapTxt = res.adaptation && res.adaptation.adapted ? ` | Auto-adapted: ${res.adaptation.action_summary}` : "";
+        showToast(`Synced ${ouraCnt} Oura records (${res.oura_runs_synced || 0} running workouts matched)${adapTxt}`, "info");
+        await refreshStatus();
+        await loadCoachOverview();
+        if (el("bioView").style.display !== "none") await loadBiometrics();
+      } catch (err) {
+        showToast(err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Sync Oura & Adapt";
+      }
+    });
+
+    // ==================== BIOMETRICS TAB CHARTS ====================
+    function renderLineChart(svgEl, timeline, seriesList, yMinOverride = null, yMaxOverride = null) {
+      const W = 560, H = 210, padL = 36, padR = 14, padT = 14, padB = 28;
+      const plotW = W - padL - padR, plotH = H - padT - padB;
+      const allVals = [];
+      seriesList.forEach(s => timeline.forEach(r => { if (r[s.key] != null) allVals.push(Number(r[s.key])); }));
+      if (!timeline.length || !allVals.length) {
+        svgEl.innerHTML = `<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#64748b" font-size="13">No data in window</text>`;
+        return;
+      }
+      let minV = yMinOverride !== null ? yMinOverride : Math.min(...allVals);
+      let maxV = yMaxOverride !== null ? yMaxOverride : Math.max(...allVals);
+      if (minV === maxV) { minV -= 5; maxV += 5; }
+      const span = maxV - minV;
+      const xFor = (i) => padL + (timeline.length === 1 ? plotW / 2 : (i / (timeline.length - 1)) * plotW);
+      const yFor = (v) => padT + plotH - ((v - minV) / span) * plotH;
+      let out = "";
+      for (let g = 0; g <= 4; g++) {
+        const val = minV + (span * g) / 4, y = yFor(val);
+        out += `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#1e293b" stroke-dasharray="3,3" />`;
+        out += `<text x="${padL - 6}" y="${y + 4}" text-anchor="end" fill="#64748b" font-size="10">${Math.round(val)}</text>`;
+      }
+      const step = Math.max(1, Math.ceil(timeline.length / 6));
+      timeline.forEach((r, idx) => {
+        if (idx % step === 0 || idx === timeline.length - 1)
+          out += `<text x="${xFor(idx)}" y="${H - 6}" text-anchor="middle" fill="#64748b" font-size="10">${r.day.slice(5)}</text>`;
+      });
+      seriesList.forEach(s => {
+        const pts = [];
+        timeline.forEach((r, idx) => { if (r[s.key] != null) pts.push({ x: xFor(idx), y: yFor(Number(r[s.key])), val: r[s.key], day: r.day }); });
+        if (pts.length > 1) {
+          const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+          out += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.2" />`;
+        }
+        pts.forEach(p => { out += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="${s.color}"><title>${p.day}: ${p.val}</title></circle>`; });
+      });
+      svgEl.innerHTML = out;
+    }
+
+    function renderStackedSleepChart(svgEl, timeline) {
+      const W = 560, H = 210, padL = 36, padR = 14, padT = 14, padB = 28;
+      const plotW = W - padL - padR, plotH = H - padT - padB;
+      if (!timeline.length) { svgEl.innerHTML = ""; return; }
+      const totalsHr = timeline.map(r => ((r.deep_sleep_min || 0) + (r.rem_sleep_min || 0) + (r.light_sleep_min || 0)) / 60.0);
+      const maxH = Math.max(9, Math.ceil(Math.max(...totalsHr, 1)));
+      const yFor = (hr) => padT + plotH - (hr / maxH) * plotH;
+      let out = "";
+      const barGap = plotW / timeline.length, barW = Math.max(3, Math.min(20, barGap * 0.68));
+      const step = Math.max(1, Math.ceil(timeline.length / 6));
+      timeline.forEach((r, idx) => {
+        const x = padL + idx * barGap + (barGap - barW) / 2;
+        let curH = 0;
+        [
+          { h: (r.deep_sleep_min || 0) / 60, color: "#4f46e5" },
+          { h: (r.rem_sleep_min || 0) / 60, color: "#38bdf8" },
+          { h: (r.light_sleep_min || 0) / 60, color: "#94a3b8" },
+        ].forEach(seg => {
+          if (seg.h > 0) {
+            const topY = yFor(curH + seg.h), botY = yFor(curH);
+            out += `<rect x="${x.toFixed(1)}" y="${topY.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(1, botY - topY).toFixed(1)}" fill="${seg.color}" rx="1.5" />`;
+            curH += seg.h;
+          }
+        });
+        if (idx % step === 0 || idx === timeline.length - 1)
+          out += `<text x="${(x + barW / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle" fill="#64748b" font-size="10">${r.day.slice(5)}</text>`;
+      });
+      svgEl.innerHTML = out;
+    }
+
+    function renderBarChart(svgEl, timeline, key, color) {
+      const W = 560, H = 210, padL = 44, padR = 14, padT = 14, padB = 28;
+      const plotW = W - padL - padR, plotH = H - padT - padB;
+      const vals = timeline.map(r => Number(r[key] || 0));
+      const maxV = Math.max(...vals, 1000);
+      const ceilV = Math.ceil(maxV / 2000) * 2000;
+      const yFor = (v) => padT + plotH - (v / ceilV) * plotH;
+      let out = "";
+      const barGap = plotW / Math.max(1, timeline.length), barW = Math.max(3, Math.min(20, barGap * 0.68));
+      const step = Math.max(1, Math.ceil(timeline.length / 6));
+      timeline.forEach((r, idx) => {
+        const v = Number(r[key] || 0), x = padL + idx * barGap + (barGap - barW) / 2;
+        if (v > 0) {
+          const y = yFor(v);
+          out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(1, padT + plotH - y).toFixed(1)}" fill="${color}" rx="2"><title>${r.day}: ${v.toLocaleString()}</title></rect>`;
+        }
+        if (idx % step === 0 || idx === timeline.length - 1)
+          out += `<text x="${(x + barW / 2).toFixed(1)}" y="${H - 6}" text-anchor="middle" fill="#64748b" font-size="10">${r.day.slice(5)}</text>`;
+      });
+      svgEl.innerHTML = out;
+    }
+
+    async function loadBiometrics() {
+      const days = Number(el("daysSelect").value || 30);
+      const data = await apiGet(`/api/dashboard?days=${days}`);
+      const s = data.summary || {}, latest = s.latest || {};
+      el("kpiSleep").textContent = latest.sleep_score ?? "--";
+      el("kpiSleepSub").textContent = `${days}d avg: ${s.avg_sleep_score ?? "--"}`;
+      el("kpiReadiness").textContent = latest.readiness_score ?? "--";
+      el("kpiReadinessSub").textContent = `${days}d avg: ${s.avg_readiness_score ?? "--"}`;
+      el("kpiActivity").textContent = latest.activity_score ?? "--";
+      el("kpiActivitySub").textContent = `${days}d avg: ${s.avg_activity_score ?? "--"}`;
+      el("kpiHrv").textContent = latest.average_hrv != null ? `${Math.round(latest.average_hrv)} ms` : "--";
+      el("kpiHrvSub").textContent = `${days}d avg: ${s.avg_hrv ?? "--"} ms`;
+      el("kpiHr").textContent = latest.lowest_heart_rate != null ? `${latest.lowest_heart_rate} bpm` : "--";
+      el("kpiHrSub").textContent = `${days}d avg: ${s.avg_lowest_hr ?? "--"} bpm`;
+      el("kpiDuration").textContent = latest.total_sleep_hours != null ? `${latest.total_sleep_hours}h` : "--";
+      el("kpiSpo2Sub").textContent = `Sleep avg: ${s.avg_sleep_hours ?? "--"}h | SpO2: ${s.avg_spo2 != null ? s.avg_spo2 + "%" : "--"}`;
+
+      const timeline = data.timeline || [];
+      renderLineChart(el("scoresChart"), timeline, [
+        { key: "sleep_score", color: "#818cf8" },
+        { key: "readiness_score", color: "#34d399" },
+        { key: "activity_score", color: "#fbbf24" },
+      ], 40, 100);
+      renderLineChart(el("hrvChart"), timeline, [
+        { key: "average_hrv", color: "#2dd4bf" },
+        { key: "lowest_heart_rate", color: "#fb7185" },
+      ]);
+      renderStackedSleepChart(el("stagesChart"), timeline);
+      renderBarChart(el("stepsChart"), timeline, "steps", "#fbbf24");
+
+      el("logBody").innerHTML = [...timeline].reverse().map(r => `<tr>
+        <td><strong>${r.day}</strong></td>
+        <td>${r.sleep_score ?? "-"}</td>
+        <td>${r.readiness_score ?? "-"}</td>
+        <td>${r.activity_score ?? "-"}</td>
+        <td>${r.total_sleep_hours != null ? r.total_sleep_hours + "h" : "-"}</td>
+        <td>${r.deep_sleep_min != null ? Math.round(r.deep_sleep_min) + "m / " + Math.round(r.rem_sleep_min || 0) + "m" : "-"}</td>
+        <td>${r.average_hrv != null ? Math.round(r.average_hrv) + " ms" : "-"}</td>
+        <td>${r.lowest_heart_rate != null ? r.lowest_heart_rate + " bpm" : "-"}</td>
+        <td>${r.temperature_deviation != null ? (r.temperature_deviation >= 0 ? "+" : "") + Number(r.temperature_deviation).toFixed(2) + "°C" : "-"}</td>
+        <td>${r.steps != null ? Number(r.steps).toLocaleString() : "-"}</td>
+        <td>${r.stress_summary ? `<span class="pill">${r.stress_summary}</span>` : "-"}</td>
+        <td>${r.spo2_average != null ? r.spo2_average + "%" : "-"}</td>
+      </tr>`).join("");
+    }
+
+    el("daysSelect").addEventListener("change", () => loadBiometrics());
+    el("exportCsvBtn").addEventListener("click", () => { window.location.href = `/api/export?format=csv&days=${el("daysSelect").value}`; });
+    el("exportJsonBtn").addEventListener("click", () => { window.location.href = `/api/export?format=json&days=${el("daysSelect").value}`; });
+
+    (async () => {
+      try {
+        await refreshStatus();
+        await loadCoachOverview();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    })();
+  </script>
+</body>
+</html>

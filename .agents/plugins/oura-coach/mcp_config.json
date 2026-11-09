@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "oura-coach": {
+      "command": "python3",
+      "args": ["-m", "oura_connect.mcp_server"]
+    }
+  }
+}
