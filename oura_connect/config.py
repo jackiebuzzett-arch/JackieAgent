@@ -108,13 +108,26 @@ class OAuthTokens:
 class ConfigStore:
     """Thread-safe persistence for Oura OAuth credentials and rotating refresh tokens."""
 
-    def __init__(self, config_dir: Path | None = None, data_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        config_dir: Path | None = None,
+        data_dir: Path | None = None,
+        secret_resolver: Any = None,
+    ) -> None:
         self.config_dir = config_dir or default_config_dir()
         self.data_dir = data_dir or default_data_dir()
         self.config_path = self.config_dir / "config.json"
         self.tokens_path = self.config_dir / "tokens.json"
         self.db_path = self.data_dir / "oura.db"
+        self._secret_resolver = secret_resolver
         self._lock = threading.RLock()
+
+    def _get_secret_resolver(self) -> Any:
+        if self._secret_resolver is None:
+            from .secrets_manager import CloudSecretManagerResolver
+
+            self._secret_resolver = CloudSecretManagerResolver()
+        return self._secret_resolver
 
     def load_config(self) -> AppConfig:
         with self._lock:
@@ -122,8 +135,17 @@ class ConfigStore:
             if self.config_path.exists():
                 file_data = json.loads(self.config_path.read_text(encoding="utf-8"))
 
-            client_id = os.environ.get("OURA_CLIENT_ID") or file_data.get("client_id", "")
-            client_secret = os.environ.get("OURA_CLIENT_SECRET") or file_data.get("client_secret", "")
+            resolver = self._get_secret_resolver()
+            client_id = resolver.resolve(
+                secret_id="oura-client-id",
+                env_var="OURA_CLIENT_ID",
+                fallback_value=str(file_data.get("client_id", "")),
+            ).reveal()
+            client_secret = resolver.resolve(
+                secret_id="oura-client-secret",
+                env_var="OURA_CLIENT_SECRET",
+                fallback_value=str(file_data.get("client_secret", "")),
+            ).reveal()
             redirect_uri = os.environ.get("OURA_REDIRECT_URI") or file_data.get(
                 "redirect_uri", DEFAULT_REDIRECT_URI
             )
@@ -134,6 +156,14 @@ class ConfigStore:
                 redirect_uri=str(redirect_uri).strip(),
                 scopes=[str(s) for s in scopes],
             )
+
+    def load_gemini_api_key(self) -> str:
+        resolver = self._get_secret_resolver()
+        return resolver.resolve(
+            secret_id="gemini-api-key",
+            env_var="GEMINI_API_KEY",
+            fallback_value=os.environ.get("GOOGLE_API_KEY", ""),
+        ).reveal()
 
     def save_config(self, config: AppConfig) -> None:
         with self._lock:

@@ -1,0 +1,70 @@
+name: JackieAgent CI & Evaluation Gate
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  unit-and-eval-gate:
+    name: Unit Tests, Observability Audit & Golden Evaluation Harness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Verify Zero Raw Print Calls in Agent Package
+        run: |
+          python3 -c "
+          import ast, pathlib, sys
+          bad = []
+          for p in pathlib.Path('oura_connect').rglob('*.py'):
+              tree = ast.parse(p.read_text(encoding='utf-8'))
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Call) and getattr(node.func, 'id', None) == 'print':
+                      bad.append(f'{p}:{node.lineno}')
+          if bad:
+              sys.stderr.write('Disallowed print() calls found: ' + ', '.join(bad) + '\n')
+              sys.exit(1)
+          "
+
+      - name: Run Unit & Integration Tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Run Golden-Dataset Agent Evaluation Harness (>=95% Gate)
+        run: python3 -m evals.run_evals --fail-under 0.95 --output-json eval_report.json
+
+      - name: Upload Evaluation Scorecard Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-eval-scorecard
+          path: eval_report.json
+
+  iac-and-container-validation:
+    name: Terraform IaC & Container Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Validate Terraform Formatting & Configuration
+        working-directory: infra
+        run: |
+          terraform fmt -check
+          terraform init -backend=false
+          terraform validate
+
+      - name: Build Production Container Image
+        run: docker build -t jackie-agent:ci .

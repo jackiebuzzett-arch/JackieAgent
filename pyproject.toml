@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jackie-agent"
+version = "0.3.0"
+description = "L200 Oura-Native Multi-Agent Half-Marathon Coach with Gemini 3 Orchestration, OTel Tracing, and HITL Governance"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "google-genai>=2.25.0",
+    "opentelemetry-api>=1.27.0",
+    "opentelemetry-sdk>=1.27.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.27.0",
+    "google-cloud-secret-manager>=2.20.0",
+]
+
+[project.scripts]
+jackie-agent = "oura_connect.cli:main"
+jackie-agent-mcp = "oura_connect.mcp_server:serve_stdio"
+
+[tool.setuptools.packages.find]
+include = ["oura_connect*", "evals*"]

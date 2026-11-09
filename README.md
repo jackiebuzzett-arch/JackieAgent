@@ -1,6 +1,6 @@
-# JackieAgent — Oura-Native Adaptive Half-Marathon Coach
+# JackieAgent — L200 Oura-Native Multi-Agent Half-Marathon Coach
 
-Zero-dependency Python `3.13` physiological endurance coach & MCP agent powered **100% natively by Oura Ring API v2**. Built to dynamically guide a **17-week Sub-2:00 Publix Atlanta Half-Marathon** build (`2026-11-09` &rarr; `2027-03-06`) by combining deterministic exercise-physiology guardrails with conversational agentic replanning.
+Production-grade multi-agent endurance coaching system powered **100% natively by Oura Ring API v2** and the **Google Gemini 3 Interactions API** (`google-genai`). Built to dynamically guide a **17-week Sub-2:00 Publix Atlanta Half-Marathon** build (`2026-11-09` &rarr; `2027-03-06`) with deterministic physiological guardrails, Human-in-the-Loop (HITL) governance, OpenTelemetry tracing, and automated golden-dataset CI evaluation.
 
 ---
 
@@ -8,81 +8,75 @@ Zero-dependency Python `3.13` physiological endurance coach & MCP agent powered 
 
 ```mermaid
 flowchart TB
-    subgraph OuraCloud["Oura Ring API v2 (OAuth 2.0)"]
-        Recovery["Nightly HRV, Resting HR, Sleep Stages, Temp Δ, Daytime Stress & Steps"]
-        Workouts["Synced Running Workouts & Workout Heart Rate"]
+    subgraph Telemetry["Oura Ring API v2 + Cloud Secret Manager"]
+        Oura["HRV, Resting HR, Sleep Stages, Temp Δ, Stress & Running Workouts"]
+        Secrets["GCP Secret Manager -> Env -> Local 0600 Store"]
     end
 
-    subgraph CoreEngine["Deterministic Coaching Engine (oura_connect)"]
-        DB[("Local SQLite Cache (oura.db)")]
-        Readiness["Readiness-to-Train Scorer (28-Day Rolling HRV z-score & Guardrails)"]
-        Planner["17-Week Atlanta Sub-2:00 Plan + Workout Tetris + 1-Click Undo"]
+    subgraph Supervisor["4-Agent Supervisor Pipeline (oura_connect/orchestrator.py)"]
+        GuardIn["Input Guardrail & PII Redactor"]
+        Triage["Agent 1: Triage Router (gemini-3.5-flash-lite)"]
+        Analyst["Agent 2: Physiology Analyst (gemini-3.8-flash)"]
+        Architect["Agent 3: Training Architect (gemini-3.8-flash / gemini-3.1-pro-preview)"]
+        Critic["Agent 4: Safety & Invariant Critic (gemini-3.5-flash-lite)"]
+        HITL["Human-in-the-Loop (HITL) Approval Gate"]
     end
 
-    subgraph Surfaces["Interactive & Agentic Surfaces"]
-        WebUI["Local Web Dashboard (http://localhost:8080)"]
-        MCP["Stdio MCP Server (oura_connect.mcp_server)"]
-        Skill["Antigravity Plugin & Coaching Skill (.agents/plugins/oura-coach)"]
+    subgraph MemoryAndObs["Memory, Observability & State"]
+        Compactor["Token-Budgeted LLM History Compactor"]
+        AsyncWorker["Async Background Memory Consolidator"]
+        OTel["OpenTelemetry Spans + Structured JSONL + Intent/Outcome Audit"]
+        DB[("SQLite State (oura.db)")]
     end
 
-    Recovery --> DB
-    Workouts --> DB
-    DB <--> Readiness
-    Readiness --> Planner
-    Planner <--> DB
-    DB <--> WebUI
-    DB <--> MCP
-    MCP <--> Skill
+    Secrets --> Oura
+    Oura --> DB
+    GuardIn --> Triage --> Analyst --> Architect --> Critic
+    Critic -->|"High-Impact Change"| HITL --> DB
+    Critic -->|"Verified Safe"| DB
+    Architect <--> Compactor
+    DB <--> AsyncWorker
+    Supervisor --> OTel
 ```
+
+See **[AGENTS.md](AGENTS.md)** for full sub-agent contracts, Gemini 3 model routing rules, guardrail invariants, and HITL lifecycle details.
 
 ---
 
-## Key Capabilities
+## L200 Engineering Pillars
 
-- **Secure OAuth 2.0 & Rotating Refresh Tokens (`0600` Atomic Storage):** Handles Oura API v2's single-use refresh token rotation automatically with atomic file writes (`~/.config/oura-connect/`), keeping all personal tokens and health records strictly outside git.
-- **Physiological Readiness-to-Train Signal (`GREEN` / `YELLOW` / `RED`):**
-  - Evaluates personal **28-day rolling Nightly HRV (`z-score`)** and **Lowest Resting HR** baselines, skin temperature circuit-breakers (`>= +0.4°C` + elevated RHR), non-running step/stress load, and subjective soreness check-ins.
-  - Avoids naive "one short sleep = skip run" false alarms when autonomic recovery (`HRV` & `RHR`) remains strong, while catching multi-day sympathetic fatigue.
-- **17-Week Publix Atlanta Sub-2:00 Periodization + "Workout Tetris" Auto-Adapter:**
-  - Progresses safely from `< 10 mpw` across 4 phases (`Aerobic & Tendon Base` &rarr; `Atlanta Hill & Threshold Build` &rarr; `Sub-2:00 Specific Peak` &rarr; `Race Taper`) with 4th-week cutbacks, rolling hill workouts, and 2x/wk 15-min calf/glute runner prehab.
-  - Automatically swaps quality workouts into open flex days (`Wed` / `Fri` + weekend Long Run shift) to preserve a `>= 48h` recovery buffer—recording every change in an **Adaptation Audit Log** with **1-Click Undo**.
-- **Native Antigravity Plugin (`.agents/plugins/oura-coach/`):**
-  - Exposes 6 live JSON-RPC 2.0 `stdio` MCP tools (`coach_morning_briefing`, `coach_get_training_plan`, `coach_sync_telemetry`, `coach_log_checkin`, `coach_swap_or_edit_workout`, `coach_undo_adaptation`) paired with the [`half-marathon-coach`](.agents/plugins/oura-coach/skills/half-marathon-coach/SKILL.md) playbook.
+1. **Multi-Agent Orchestration, Model Routing & HITL (`oura_connect/orchestrator.py`):**
+   - Coordinates `TriageRouterAgent` (`gemini-3.5-flash-lite`), `PhysiologyAnalystAgent` (`gemini-3.8-flash`), `TrainingArchitectAgent` (`gemini-3.8-flash` / `gemini-3.1-pro-preview`), and `SafetyCriticAgent`.
+   - Enforces input prompt-injection & clinical red-flag guardrails (`chest pain`, `syncope`, `stress fracture`) plus output exercise-physiology invariants (`<= 15%` mileage cap, `>= 48h` quality buffer).
+   - Stages high-impact plan mutations in `hitl_approvals` (`PENDING`) until explicitly approved by the athlete.
+2. **Stateful Context Compaction & Async Memory (`oura_connect/memory.py`):**
+   - `ConversationMemoryManager` performs token-budgeted LLM conversation history compaction into `compacted_summaries`.
+   - `BackgroundMemoryConsolidator` runs asynchronous background jobs (`asyncio` + daemon `ThreadPoolExecutor`) extracting durable athlete facts into `long_term_memories`.
+3. **Observability, OpenTelemetry & PII Redaction (`oura_connect/observability.py`):**
+   - W3C `traceparent` distributed spans (`opentelemetry-sdk` + `traces.jsonl`), structured JSONL logging (zero raw `print` calls), explicit `IntentOutcomeTracker` drift auditing, and recursive `PIIRedactor` scrubbing emails, tokens, and API keys.
+4. **Actionable MCP Tool Design (`oura_connect/mcp_server.py`, `oura_connect/errors.py`):**
+   - 9 JSON-RPC 2.0 `stdio` MCP tools returning structured `ActionableToolError` payloads with `error_code`, `retryable`, `suggested_tool`, and step-by-step `recovery_instructions`.
+5. **Evaluation Harness, Cloud Secret Manager, Terraform IaC & CI/CD:**
+   - **Golden Evaluation Suite (`evals/`):** 16 multi-dimensional scenarios tested via `python3 -m evals.run_evals --fail-under 0.95`.
+   - **Cloud Secret Manager (`oura_connect/secrets_manager.py`):** Resolves credentials via Google Cloud Secret Manager &rarr; Environment &rarr; Local `0600` files.
+   - **Cloud IaC & CI (`infra/*.tf`, `Dockerfile`, `.github/workflows/ci.yml`):** Terraform Cloud Run v2 + Secret Manager + least-privilege IAM, verified automatically in GitHub Actions.
 
 ---
 
 ## Quickstart
 
-### 1. Register a Personal Oura OAuth2 Application
-1. Sign in at **[https://cloud.ouraring.com](https://cloud.ouraring.com)** &rarr; **API Applications** &rarr; **Create New Application**.
-2. Set **Redirect URI** to `http://localhost:8080/oauth/callback`.
-3. Copy your **Client ID** and **Client Secret**.
-
-### 2. Launch the Coach & Biometrics Web Dashboard
 ```bash
+# Launch Web Dashboard + Multi-Agent Coach Console (http://localhost:8080)
 python3 -m oura_connect serve --open-browser
-```
-Open **`http://localhost:8080`**, click **Oura Settings** to paste your `Client ID` and `Client Secret`, authorize in your browser, and click **Sync Oura & Adapt**.
 
-### 3. CLI Commands
-```bash
-# Morning Readiness-to-Train Coach Briefing + Active Week Schedule
-python3 -m oura_connect coach
+# Ask the 4-Agent Supervisor Orchestrator from CLI
+python3 -m oura_connect ask "Can we swap Saturday's long run to Sunday?"
 
-# Sync latest Oura biometrics & running workouts into local SQLite
-python3 -m oura_connect sync --days 30
+# Review / Approve Human-in-the-Loop (HITL) requests
+python3 -m oura_connect approvals
+python3 -m oura_connect approvals --approve 1
 
-# Terminal table of daily Sleep, Readiness, Activity, HRV, Min HR & Stress
-python3 -m oura_connect summary --days 14
-
-# Export unified daily timeline to CSV or JSON
-python3 -m oura_connect export --format csv --days 90 --output ./exports
-```
-
----
-
-## Automated Tests
-
-```bash
+# Run Unit Tests & Golden-Dataset Agent Evaluation Harness
 python3 -m unittest discover -s tests -v
+python3 -m evals.run_evals --fail-under 0.95
 ```

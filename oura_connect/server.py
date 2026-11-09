@@ -21,6 +21,14 @@ from .coach import (
 )
 from .config import AppConfig, ConfigStore
 from .oauth import OAuthManager, OuraOAuthError
+from .observability import (
+    DEFAULT_INTENT_TRACKER,
+    DEFAULT_LOGGER,
+    DEFAULT_TRACER,
+    PIIRedactor,
+    log_event,
+)
+from .orchestrator import MultiAgentCoachOrchestrator
 from .storage import OuraStorage
 from .strava import StravaConfig, StravaError, StravaManager
 
@@ -45,6 +53,7 @@ class OuraAppContext:
         self.strava = strava or StravaManager(store)
         self.last_oauth_event: dict[str, Any] | None = None
         ensure_plan_initialized(self.storage)
+        self.orchestrator = MultiAgentCoachOrchestrator(store=self.store)
 
 
 def create_http_server(
@@ -220,13 +229,36 @@ def create_http_server(
                     self._send_html(HTTPStatus.BAD_REQUEST, _oauth_result_page(False, str(exc)))
                 return
 
+            if path == "/healthz":
+                self._send_json(HTTPStatus.OK, {"status": "healthy", "service": "jackie-half-marathon-agent"})
+                return
+
+            if path == "/api/coach/approvals":
+                status_filter = ((qs.get("status") or ["PENDING"])[0]).upper()
+                self._send_json(
+                    HTTPStatus.OK,
+                    {"approvals": ctx.orchestrator.hitl.list_approvals(status=status_filter)},
+                )
+                return
+
+            if path == "/api/telemetry/traces":
+                self._send_json(
+                    HTTPStatus.OK,
+                    {
+                        "spans": DEFAULT_TRACER.get_recent_spans(limit=30),
+                        "intent_outcomes": DEFAULT_INTENT_TRACKER.get_recent_outcomes(limit=20),
+                    },
+                )
+                return
+
             if path == "/api/coach/overview":
                 run_adapt = (qs.get("adapt") or ["1"])[0] != "0"
                 today_param = (qs.get("date") or [""])[0] or None
                 adaptation = auto_adapt_plan(ctx.storage, target_day=today_param) if run_adapt else None
                 overview = get_coach_overview(ctx.storage, today_str=today_param)
                 overview["adaptation_event"] = adaptation
-                self._send_json(HTTPStatus.OK, overview)
+                overview["pending_approvals"] = ctx.orchestrator.hitl.list_approvals(status="PENDING", limit=10)
+                self._send_json(HTTPStatus.OK, PIIRedactor.redact(overview))
                 return
 
             if path == "/api/coach/week":
@@ -448,6 +480,36 @@ def create_http_server(
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
                 return
 
+            if path == "/api/coach/ask":
+                prompt = str(body.get("prompt") or "").strip()
+                session_id = str(body.get("session_id") or "web-session")
+                ref_date = str(body.get("date") or "") or None
+                if not prompt:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": "Prompt cannot be empty."})
+                    return
+                result = ctx.orchestrator.handle_request(
+                    user_prompt=prompt,
+                    session_id=session_id,
+                    reference_date=ref_date,
+                )
+                self._send_json(HTTPStatus.OK, {"ok": True, **result})
+                return
+
+            if path == "/api/coach/approvals/resolve":
+                approval_id = int(body.get("approval_id") or 0)
+                approved = bool(body.get("approved", True))
+                note = str(body.get("note") or "")
+                try:
+                    res = ctx.orchestrator.hitl.resolve_approval(
+                        approval_id=approval_id,
+                        approved=approved,
+                        note=note,
+                    )
+                    self._send_json(HTTPStatus.OK, {"ok": True, **res})
+                except ValueError as exc:
+                    self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+                return
+
             if path == "/api/coach/undo":
                 adap_id = int(body.get("adaptation_id") or 0)
                 try:
@@ -457,6 +519,7 @@ def create_http_server(
                     self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
                 return
 
+            log_event(DEFAULT_LOGGER, "http.404", f"Unknown POST route: {path}")
             self._send_json(HTTPStatus.NOT_FOUND, {"error": f"Unknown route: {path}"})
 
     return ThreadingHTTPServer((host, port), Handler)

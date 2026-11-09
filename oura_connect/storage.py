@@ -150,6 +150,53 @@ class OuraStorage:
                     updated_days_json TEXT NOT NULL,
                     reverted_at TEXT
                 );
+                CREATE TABLE IF NOT EXISTS conversation_turns (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    token_estimate INTEGER NOT NULL DEFAULT 0,
+                    compacted INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_turns_session
+                    ON conversation_turns (session_id, compacted, id);
+                CREATE TABLE IF NOT EXISTS compacted_summaries (
+                    session_id TEXT PRIMARY KEY,
+                    summary_text TEXT NOT NULL,
+                    compacted_turn_count INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS long_term_memories (
+                    memory_key TEXT PRIMARY KEY,
+                    category TEXT NOT NULL,
+                    fact TEXT NOT NULL,
+                    confidence REAL NOT NULL DEFAULT 0.85,
+                    source_session TEXT NOT NULL DEFAULT '',
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS memory_consolidation_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    extracted_count INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    completed_at TEXT
+                );
+                CREATE TABLE IF NOT EXISTS hitl_approvals (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'PENDING',
+                    action_type TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    rationale TEXT NOT NULL,
+                    risk_level TEXT NOT NULL DEFAULT 'HIGH',
+                    proposed_days_json TEXT NOT NULL,
+                    previous_days_json TEXT NOT NULL,
+                    resolved_at TEXT,
+                    resolver_note TEXT NOT NULL DEFAULT ''
+                );
                 """
             )
 

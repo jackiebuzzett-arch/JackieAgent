@@ -339,6 +339,20 @@
         <div class="week-grid" id="weekGrid"></div>
       </section>
 
+      <!-- Multi-Agent Supervisor Console & HITL Approval Gate -->
+      <section class="card" style="margin-bottom:20px; border-color:#2b4268;">
+        <div class="chart-header">
+          <h3>Multi-Agent Coach Console (4-Agent Supervisor + HITL Gate)</h3>
+          <span style="font-size:0.78rem; color:var(--muted);">Routes across Gemini 3.5 Flash-Lite / 3.8 Flash / 3.1 Pro</span>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <input id="agentAskInput" type="text" placeholder="Ask your coach (e.g. 'Swap Saturday long run to Sunday' or 'My left calf feels tight')" style="flex:1; min-width:260px;" />
+          <button class="btn-primary" id="agentAskBtn">Ask Multi-Agent Coach</button>
+        </div>
+        <div id="agentAskOutput" style="display:none; margin-top:12px; padding:12px 14px; border-radius:10px; background:#0b1220; border:1px solid var(--border); font-size:0.85rem; white-space:pre-wrap; line-height:1.55;"></div>
+        <div id="hitlPendingList" style="margin-top:12px;"></div>
+      </section>
+
       <!-- Adaptation Audit Log + 1-Click Undo -->
       <section class="card">
         <div class="chart-header">
@@ -634,7 +648,60 @@
           });
         });
       }
+
+      const hitlEl = el("hitlPendingList");
+      const pending = ov.pending_approvals || [];
+      if (!pending.length) {
+        hitlEl.innerHTML = "";
+      } else {
+        hitlEl.innerHTML = pending.map(p => `<div class="audit-item" style="border-top:1px solid var(--border);">
+          <div>
+            <span class="signal-pill signal-YELLOW" style="padding:2px 8px; font-size:0.72rem; margin-right:8px;">HITL #${p.id}</span>
+            <strong>${p.summary}</strong> &mdash; <span style="color:var(--muted);">${p.rationale}</span>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-primary" data-hitl-approve="${p.id}" style="padding:5px 12px; font-size:0.78rem;">Approve</button>
+            <button data-hitl-reject="${p.id}" style="padding:5px 12px; font-size:0.78rem; color:var(--red);">Reject</button>
+          </div>
+        </div>`).join("");
+
+        hitlEl.querySelectorAll("[data-hitl-approve]").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            await apiPost("/api/coach/approvals/resolve", { approval_id: Number(btn.getAttribute("data-hitl-approve")), approved: true });
+            showToast("Approved HITL schedule change and updated calendar.", "info");
+            await loadCoachOverview();
+          });
+        });
+        hitlEl.querySelectorAll("[data-hitl-reject]").forEach(btn => {
+          btn.addEventListener("click", async () => {
+            await apiPost("/api/coach/approvals/resolve", { approval_id: Number(btn.getAttribute("data-hitl-reject")), approved: false });
+            showToast("Rejected proposed HITL change.", "info");
+            await loadCoachOverview();
+          });
+        });
+      }
     }
+
+    el("agentAskBtn").addEventListener("click", async () => {
+      const prompt = el("agentAskInput").value.trim();
+      if (!prompt) return;
+      const btn = el("agentAskBtn");
+      btn.disabled = true;
+      btn.textContent = "Routing...";
+      try {
+        const res = await apiPost("/api/coach/ask", { prompt, date: todayIso });
+        const box = el("agentAskOutput");
+        box.style.display = "block";
+        box.textContent = `[Trace ${res.trace_id.slice(0, 12)} | Intent: ${res.intent} | Architect: ${(res.routed_models && res.routed_models.training_architect) || "guardrail"}]\n\n${res.response}`;
+        el("agentAskInput").value = "";
+        await loadCoachOverview();
+      } catch (err) {
+        showToast(err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Ask Multi-Agent Coach";
+      }
+    });
 
     el("prevWeekBtn").addEventListener("click", () => loadWeek(currentWeek - 1));
     el("nextWeekBtn").addEventListener("click", () => loadWeek(currentWeek + 1));
